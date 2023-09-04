@@ -1,21 +1,17 @@
-import cv2
+import numpy as np
+import cv2 as cv
 
-imagePath = 'good_chess_image.png'
+img = cv.imread('IMG_3382.JPG')
+Z = img.reshape((-1,3))
+# convert to np.float32
+Z = np.float32(Z)
+# define criteria, number of clusters(K) and apply kmeans()
+criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+K = 3
+ret,label,center=cv.kmeans(Z,K,None,criteria,10,cv.KMEANS_RANDOM_CENTERS)
+# Now convert back into uint8, and make original image
+center = np.uint8(center)
+res = center[label.flatten()]
+res2 = res.reshape((img.shape))
 
-img = cv2.imread(imagePath)
-
-gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-face_classifier = cv2.CascadeClassifier(
-    cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-    )
-
-face = face_classifier.detectMultiScale(
-    gray_image, scaleFactor=1.1, minNeighbors=5, minSize=(40, 40)
-    )
-
-for (x, y, w, h) in face:
-    cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 4)
-
-img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-cv2.imwrite('image.png', img_rgb)
+cv.imwrite('disp.png', res2)
