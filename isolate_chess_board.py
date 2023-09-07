@@ -1,66 +1,73 @@
 import numpy as np
 import cv2 as cv
 
-# Load the chessboard image
-raw_img_path = 'good_pics/IMG_3382.JPG'
-raw_img = cv.imread(raw_img_path)
-assert raw_img is not None, f"image not found at '{raw_img_path}'!"
+def load_image(file='good_pics/IMG_3382.JPG'):
+    # Load the chessboard image
+    raw_img = cv.imread(file)
+    assert raw_img is not None, f"image not found at '{file}'!"
+    return raw_img
 
-# # Run Canny edge detection algorithm
-# canny_img = cv.Canny(raw_img, 50, 300)
-# assert canny_img is not raw_img
-# cv.imwrite('canny_img.png', canny_img)
+def threshold_image(img, separate_param=100, reverse_binary=False):
+    # Run basic thresholding
+    grey_img = cv.cvtColor(img.copy(), cv.COLOR_BGR2GRAY)
+    _, threshold_img = cv.threshold(grey_img, separate_param, 255, 0)
+    # Reverse binary image
+    if reverse_binary:
+        threshold_img = cv.bitwise_not(threshold_img)
+    return threshold_img
 
-# Run basic thresholding
-grey_img = cv.cvtColor(raw_img.copy(), cv.COLOR_BGR2GRAY)
-ret, threshold_img = cv.threshold(grey_img, 100, 255, 0)
-# Reverse binary image
-threshold_img = cv.bitwise_not(threshold_img)
-cv.imwrite('threshold_img.png', threshold_img)
+def get_contours(binary_img):
+    # Rip contours from image pixels and draw contours over raw_img
+    contours, _ = cv.findContours(binary_img, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
+    return contours
 
+def remove_noise_contours(contours, area_min=60000, length_min=1000):
+    # Remove contours that have small length, and
+    # Remove contours that have a small area
+    bad_contours = []
+    good_contours = []
+    for cnt in contours:
+        if cv.contourArea(cnt) < area_min or cv.arcLength(cnt, False) < length_min:
+            bad_contours.append(cnt)
+        else:
+            good_contours.append(cnt)
 
-# Rip contours from canny_img pixels and draw contours over raw_img
-contours, hierarchy = cv.findContours(threshold_img, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
-all_contours_img = cv.drawContours(raw_img.copy(), contours, -1, (255, 0, 0), 10)
-cv.imwrite('all_contours_img.png', all_contours_img)
+    print(f"ratio of good contours to total contours: {len(good_contours)/len(contours)}")
 
-# Color in really small closed contours
-bad_contours = []
-good_contours = []
-for cnt in contours:
-    if cv.contourArea(cnt) < 60000:
-        bad_contours.append(cnt)
+    return good_contours
+
+def contour_to_square(contour, epsilon=1000, canvas_image=None):
+    # Convert chessboard contours to square and find corner positions
+    board_outline = cv.approxPolyDP(contour, epsilon, True)
+
+    if canvas_image is not None:
+        board_outline_img = cv.drawContours(canvas_image.copy(), board_outline, -1, (255, 0, 255), 20)
     else:
-        good_contours.append(cnt)
+        board_outline_img = None
 
-# Draw in small tings        
-bad_contours_threshold_img = cv.fillPoly(threshold_img, pts=bad_contours,color=(255,255,255))
-cv.imwrite('bad_contours_filled_img.png', bad_contours_threshold_img)
+    return (board_outline, board_outline_img)
 
-# Remove all small arc length contours
-short_contours = []
-long_contours = []
-for cnt in good_contours:
-    if cv.arcLength(cnt, False) < 1000:
-        short_contours.append(cnt)
-    else:
-        long_contours.append(cnt)
+def draw_contour(canvas_img, contours, name="temp"):
+    draw_img = cv.fillPoly(canvas_img, pts=contours,color=(255,255,255))
+    cv.imwrite(f'{name}.png', draw_img)
 
-print(f"ratio of long to total checked contours: {len(long_contours)/len(good_contours)}")
+def main():
+    raw_img = load_image()
+    threshold_img = threshold_image(raw_img)
+    
+    contours = get_contours(threshold_img)
+    draw_contour(raw_img, contours, "all_contours")
 
-# Draw left over contours on original image
-long_contours_img = cv.drawContours(raw_img.copy(), long_contours, -1, (255, 0, 0), 10)
-cv.imwrite('long_contours_img.png', long_contours_img)
+    contours = remove_noise_contours(contours)
+    draw_contour(raw_img, contours, "some_contours")
+    
+    corners = contour_to_square(contours[2])
+    draw_contour(raw_img, contours, "square")
+    
+    print(corners)
 
-# Hand remove some contours
-hand_selected_contours = long_contours[2:]
-chess_board_contour = hand_selected_contours[0]
-hand_selected_contours_img = cv.drawContours(raw_img.copy(), chess_board_contour, -1, (0, 0, 255), 10)
-cv.imwrite('hand_selected_contours_img.png', hand_selected_contours_img)
+    cv.imwrite("output.png", raw_img)
+    input("Press Enter...")
 
-# Convert chessboard contours to square and find corner positions
-board_outline = cv.approxPolyDP(chess_board_contour, 1000, True)
-board_outline_img = cv.drawContours(raw_img.copy(), board_outline, -1, (255, 0, 255), 20)
-cv.imwrite('board_outline_img.png', board_outline_img)
-
-print(board_outline)
+if __name__ == "__main__":
+    main()
